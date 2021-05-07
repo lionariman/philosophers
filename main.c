@@ -113,30 +113,30 @@ int		init_mutexes(t_main *m)
 	i = -1;
 	while (++i < m->args.num_of_p)
 		pthread_mutex_init(&m->mutexes.forks[i], NULL);
-	pthread_mutex_init(&m->mutexes.died, NULL);
-	pthread_mutex_init(&m->mutexes.mstat, NULL);
+	// pthread_mutex_init(&m->mutexes.died, NULL);
+	// pthread_mutex_init(&m->mutexes.mstat, NULL);
 	return (0);
 }
 
-long	save_time(long time)
-{
-	struct timeval	the_time;
+// long	save_time(long time)
+// {
+// 	struct timeval	the_time;
 
-	gettimeofday(&the_time, NULL);
-	time = the_time.tv_sec * 1000;
-	time += the_time.tv_usec / 1000;
-	return (time);
-}
+// 	gettimeofday(&the_time, NULL);
+// 	time = the_time.tv_sec * 1000;
+// 	time += the_time.tv_usec / 1000;
+// 	return (time);
+// }
 
 int		init_philosophers(t_main *m)
 {
 	int		i;
 
-	m->time = save_time(m->time);
+	// m->time = save_time(m->time);
 	i = -1;
 	m->p = (t_philosophers *)malloc(sizeof(t_philosophers) * m->args.num_of_p);
 	if (!m->p)
-		return (print_error("cannot alocate memory: t_philosophers"));
+		return (print_error("cannot allocate memory: t_philosophers"));
 	while (++i < m->args.num_of_p)
 	{
 		m->p[i].id = i + 1;
@@ -145,8 +145,8 @@ int		init_philosophers(t_main *m)
 			m->p[i].r_fork = m->mutexes.forks[0];
 		else
 			m->p[i].r_fork = m->mutexes.forks[i + 1];
-		m->p->start = m->time;
-		m->p->last = 0;
+		// m->p->start = m->time;
+		// m->p->last = 0;
 		m->p->args = m->args;
 		m->p->mutexes = m->mutexes;
 	}
@@ -157,10 +157,23 @@ int		init_philosophers(t_main *m)
 //------------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------
 
-void	*performance(void *philosopher)
+void	*simulation(void *philosopher)
 {
-	printf("HELLO!\n");
-	return (NULL);
+	int	i;
+	t_philosophers *p;
+
+	p = philosopher;
+	i = -1;
+	pthread_mutex_lock(&p->l_fork);
+	pthread_mutex_lock(&p->r_fork);
+	printf("philosopher %d take forks\n", p->id);
+	usleep(2000000);
+	printf("philosopher %d is eating\n", p->id);
+	usleep(2000000);
+	printf("philosopher %d left forks\n", p->id);
+	pthread_mutex_unlock(&p->l_fork);
+	pthread_mutex_unlock(&p->r_fork);
+	return NULL;
 }
 
 int		beginning(t_main *m)
@@ -170,11 +183,9 @@ int		beginning(t_main *m)
 	i = -1;
 	while (++i < m->args.num_of_p)
 	{
-		pthread_create(&m->p[i].thread, NULL, performance, &m->p[i]);
-		//----------------------------------
-		printf("%d thread is created\n", i);
+		printf("%d philosopher was born\n", m->p[i].id);
+		pthread_create(&m->p[i].thread, NULL, simulation, &m->p[i]);
 		sleep(1);
-		//----------------------------------
 	}
 	//...............
 	//...............
@@ -206,5 +217,6 @@ int 	main(int ac, char **av)
 	if (beginning(&m))
 		return (1);
 	free_memory(&m);
+	// while (1);
 	return (0);
 }
