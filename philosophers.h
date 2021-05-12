@@ -8,10 +8,7 @@
 # include <pthread.h>
 # include <sys/time.h>
 
-typedef struct	s_died
-{
-	int			died;
-}				t_died;
+unsigned int	died;
 
 typedef struct	s_mutex
 {
@@ -28,7 +25,6 @@ typedef struct	s_arg
 	long		time_to_eat;
 	long		time_to_sleep;
 	long		num_of_times_each_p_must_eat;
-	t_died		*dd;
 }				t_arg;
 
 typedef struct	s_philosophers

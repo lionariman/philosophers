@@ -6,7 +6,7 @@
 /*   By: keuclide <keuclide@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/05/11 21:38:19 by keuclide          #+#    #+#             */
-/*   Updated: 2021/05/12 08:33:21 by keuclide         ###   ########.fr       */
+/*   Updated: 2021/05/12 08:50:26 by keuclide         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -71,7 +71,6 @@ long	m_atol(char *number)
 void	m_free(t_main *m)
 {
 	free(m->p);
-	free(m->args.dd);
 	free(m->mutexes.forks);
 }
 
@@ -107,16 +106,13 @@ int		validation(char **av)
 
 int		initialize(int ac, char **av, t_main *m)
 {
+	died = 0;
 	m->args.num_of_p = m_atol(av[1]);
 	if (m->args.num_of_p < 2 || m->args.num_of_p > 200)
 		return (m_error("wrong number of philosophers"));
 	m->args.time_to_die = m_atol(av[2]);
 	m->args.time_to_eat = m_atol(av[3]);
 	m->args.time_to_sleep = m_atol(av[4]);
-	m->args.dd = (t_died *)malloc(sizeof(t_died));
-	if (!m->args.dd)
-		return (m_error("cannot allocate memory for died"));
-	m->args.dd->died = 0;
 	if (ac == 6)
 		m->args.num_of_times_each_p_must_eat = m_atol(av[5]);
 	else
@@ -178,17 +174,17 @@ void	*death_checking(void *philosopher)
 	t_philosophers	*p;
 
 	p = (t_philosophers *)philosopher;
-	while (p->args.dd->died == 0)
+	while (died == 0)
 	{
 		pthread_mutex_lock(&p->mutexes.m_wait);
 		if ((time_stamp() - p->start - p->last) > p->args.time_to_die)
 		{
 			pthread_mutex_lock(&p->mutexes.m_write);
-			if (p->args.dd->died == 0)
+			if (died == 0)
 				printf("%ld ms id %d died\n", time_stamp() - p->start, p->id);
 			pthread_mutex_unlock(&p->mutexes.m_write);
 			pthread_mutex_lock(&p->mutexes.m_died);
-			p->args.dd->died = 1;
+			died = 1;
 			pthread_mutex_unlock(&p->mutexes.m_died);
 			pthread_mutex_unlock(&p->mutexes.m_wait);
 			break ;
@@ -203,13 +199,13 @@ void	p_eating(t_philosophers *p)
 	pthread_mutex_lock(p->l_fork);
 	pthread_mutex_lock(p->r_fork);
 	pthread_mutex_lock(&p->mutexes.m_write);
-	if (p->args.dd->died == 0)
+	if (died == 0)
 		printf("%ld ms id %d has taken a fork\n", time_stamp() - p->start, p->id);
 	pthread_mutex_unlock(&p->mutexes.m_write);
 	p->last = time_stamp() - p->start;
 	pthread_mutex_lock(&p->mutexes.m_wait);
 	pthread_mutex_lock(&p->mutexes.m_write);
-	if (p->args.dd->died == 0)
+	if (died == 0)
 		printf("%ld ms id %d is eating\n", time_stamp() - p->start, p->id);
 	pthread_mutex_unlock(&p->mutexes.m_write);
 	m_sleep(p->args.time_to_eat);
@@ -221,7 +217,7 @@ void	p_eating(t_philosophers *p)
 void	p_sleeping(t_philosophers *p)
 {
 	pthread_mutex_lock(&p->mutexes.m_write);
-	if (p->args.dd->died == 0)
+	if (died == 0)
 		printf("%ld ms id %d is sleeping\n", time_stamp() - p->start, p->id);
 	pthread_mutex_unlock(&p->mutexes.m_write);
 	m_sleep(p->args.time_to_sleep);
@@ -230,7 +226,7 @@ void	p_sleeping(t_philosophers *p)
 void	p_thinking(t_philosophers *p)
 {
 	pthread_mutex_lock(&p->mutexes.m_write);
-	if (p->args.dd->died == 0)
+	if (died == 0)
 		printf("%ld ms id %d is thinking\n", time_stamp() - p->start, p->id);
 	pthread_mutex_unlock(&p->mutexes.m_write);
 }
@@ -242,7 +238,7 @@ void	p_filling(t_philosophers *p, int *i)
 		(*i)++;
 		if (*i == p->args.num_of_times_each_p_must_eat)
 		{
-			if (p->args.dd->died == 0)
+			if (died == 0)
 			{
 				pthread_mutex_lock(&p->mutexes.m_write);
 				printf("%ld ms id %d is full\n", time_stamp() - p->start, p->id);
@@ -253,16 +249,16 @@ void	p_filling(t_philosophers *p, int *i)
 	}
 }
 
-void	*simulation(void *philosopher)
+void	*threads(void *philosopher)
 {
 	int				i;
 	t_philosophers	*p;
-	pthread_t		death_note;
+	pthread_t		death_thread;
 
 	i = 0;
 	p = (t_philosophers *)philosopher;
-	pthread_create(&death_note, NULL, death_checking, (void *)p);
-	while (p->args.dd->died == 0)
+	pthread_create(&death_thread, NULL, death_checking, (void *)p);
+	while (died == 0)
 	{
 		p_eating(p);
 		p_filling(p, &i);
@@ -279,7 +275,7 @@ int		beginning(t_main *m)
 	i = -1;
 	while (++i < m->args.num_of_p)
 	{
-		if (pthread_create(&m->p[i].philosopher, NULL, simulation, &m->p[i]))
+		if (pthread_create(&m->p[i].philosopher, NULL, threads, &m->p[i]))
 			return (m_error("cannot create a philosopher"));
 		m_sleep(10);
 	}
