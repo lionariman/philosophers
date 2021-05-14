@@ -1,16 +1,16 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   philo_one.c                                        :+:      :+:    :+:   */
+/*   philo_two.c                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: keuclide <keuclide@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2021/05/11 21:38:19 by keuclide          #+#    #+#             */
-/*   Updated: 2021/05/14 13:37:32 by keuclide         ###   ########.fr       */
+/*   Created: 2021/05/12 08:57:21 by keuclide          #+#    #+#             */
+/*   Updated: 2021/05/14 15:06:44 by keuclide         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "philo_one.h"
+#include "philo_two.h"
 
 int		m_strlen(char *str)
 {
@@ -68,13 +68,59 @@ long	m_atol(char *number)
 	return (l * sign);
 }
 
-void	m_free(t_main *m)
+char	*m_memset_zero(char c, int n)
 {
-	free(m->p);
-	free(m->mutexes.forks);
+	char	*dest;
+	int		i;
+
+	dest = (char *)malloc(sizeof(char) * (n + 1));
+	if (!dest)
+		return (NULL);
+	i = 0;
+	while (i < n)
+	{
+		dest[i] = c;
+		i++;
+	}
+	dest[i] = '\0';
+	return (dest);
 }
 
-//*****************************************************************************
+void	*free_maker(char **buffer)
+{
+	int i;
+
+	i = 0;
+	while (buffer[i])
+	{
+		free(buffer[i]);
+		i++;
+	}
+	free(buffer);
+	return (NULL);
+}
+
+void	m_free(t_main *m)
+{
+	int i;
+
+	sem_unlink("forks");
+	sem_unlink("write");
+	i = -1;
+	while (++i < m->args.num_of_p)
+	{
+		sem_unlink(m->buff[i]);
+		sem_close(m->semaphore->names[i]);
+	}
+	sem_close(m->semaphore->forks);
+	sem_close(m->semaphore->s_write);
+	free(m->semaphore->names);
+	free(m->semaphore);
+	free(m->p);
+	free_maker(m->buff);
+}
+
+//************************************************************************
 
 long	time_stamp(void)
 {
@@ -120,22 +166,19 @@ int		initialize(int ac, char **av, t_main *m)
 	return (0);
 }
 
-int		init_mutexes(t_main *m)
+int		init_semaphores(t_main *m)
 {
-	int i;
-	m->mutexes.forks = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * m->args.num_of_p);
-	if (!m->mutexes.forks)
-		return (m_error("cannot allocate memory for forks"));
-	i = -1;
-	while (++i < m->args.num_of_p)
-		if (pthread_mutex_init(&m->mutexes.forks[i], NULL))
-			return (m_error("cannot initialize mutex for forks"));
-	if (pthread_mutex_init(&m->mutexes.m_died, NULL))
-		return (m_error("cannot initialize mutex for m_died"));
-	if (pthread_mutex_init(&m->mutexes.m_write, NULL))
-		return (m_error("cannot initialize mutex for m_write"));
-	if (pthread_mutex_init(&m->mutexes.m_wait, NULL))
-		return (m_error("cannot initialize mutex for m_write"));
+	m->semaphore = (t_semaphores *)malloc(sizeof(t_semaphores));
+	if (!m->semaphore)
+		return (m_error("cannot allocate memory for semaphores"));
+	sem_unlink("forks");
+	m->semaphore->forks = sem_open("forks", O_CREAT, 0644, m->args.num_of_p / 2);
+	if (m->semaphore->forks == SEM_FAILED)
+		return (m_error("cannot open semaphore for forks"));
+	sem_unlink("write");
+	m->semaphore->s_write = sem_open("write", O_CREAT, 0644, 1);
+	if (m->semaphore->s_write == SEM_FAILED)
+		return (m_error("cannot open semaphore for write"));
 	return (0);
 }
 
@@ -144,17 +187,15 @@ int		init_philosophers(t_main *m)
 	long	start_time;
 	int		i;
 
-	i = -1;
 	m->p = (t_philosophers *)malloc(sizeof(t_philosophers) * m->args.num_of_p);
 	if (!m->p)
 		return (m_error("cannot allocate memory for philosophers"));
 	start_time = time_stamp();
+	i = -1;
 	while (++i < m->args.num_of_p)
 	{
 		m->p[i].id = i + 1;
-		m->p[i].l_fork = &m->mutexes.forks[i];
-		m->p[i].r_fork = &m->mutexes.forks[(i + 1) % m->args.num_of_p];
-		m->p[i].mutexes = m->mutexes;
+		m->p[i].semaphore = m->semaphore;
 		m->p[i].args = m->args;
 		m->p[i].start = start_time;
 		m->p[i].last = 0;
@@ -162,7 +203,32 @@ int		init_philosophers(t_main *m)
 	return (0);
 }
 
-//***********************************************************************************
+int		init_names(t_main *m)
+{
+	int		i;
+
+	m->buff = (char **)malloc(sizeof(char *) * (m->args.num_of_p + 1));
+	if (!m->buff)
+		return (m_error("cannot allocate memory for **buff"));
+	m->buff[m->args.num_of_p] = NULL;
+	m->semaphore->names = (sem_t **)malloc(sizeof(sem_t *) * m->args.num_of_p);
+	if (!m->semaphore->names)
+		return (m_error("cannot allocate memory for names"));
+	i = -1;
+	while (++i < m->args.num_of_p)
+	{
+		m->buff[i] = m_memset_zero('x', i + 1);
+		if (!m->buff[i])
+			return (m_error("cannot allocate memory for *buff"));
+		sem_unlink(m->buff[i]);
+		m->semaphore->names[i] = sem_open(m->buff[i], O_CREAT, 0644, 1);
+		if (m->semaphore->names[i] == SEM_FAILED)
+			return (m_error("cannot open name"));
+	}
+	return (0);
+}
+
+//***************************************************************************
 
 void	m_sleep(long time)
 {
@@ -180,54 +246,53 @@ void	*death_checking(void *philosopher)
 	p = (t_philosophers *)philosopher;
 	while (died == 0)
 	{
-		pthread_mutex_lock(&p->mutexes.m_wait);
-		if ((time_stamp() - p->start - p->last) > p->args.time_to_die)
+		sem_wait(p->semaphore->names[p->id - 1]);
+		if (time_stamp() - p->start - p->last > p->args.time_to_die)
 		{
-			pthread_mutex_lock(&p->mutexes.m_write);
+			sem_wait(p->semaphore->s_write);
 			printf("%ld ms id %d died\n", time_stamp() - p->start, p->id);
 			died = 1;
-			pthread_mutex_unlock(&p->mutexes.m_write);
+			sem_post(p->semaphore->s_write);
 		}
-		pthread_mutex_unlock(&p->mutexes.m_wait);
+		sem_post(p->semaphore->names[p->id - 1]);
 	}
 	return NULL;
 }
 
+
 void	p_eating(t_philosophers *p)
 {
-	pthread_mutex_lock(p->l_fork);
-	pthread_mutex_lock(p->r_fork);
-	pthread_mutex_lock(&p->mutexes.m_write);
+	sem_wait(p->semaphore->forks);
+	sem_wait(p->semaphore->s_write);
 	if (died == 0)
 		printf("%ld ms id %d has taken a fork\n", time_stamp() - p->start, p->id);
-	pthread_mutex_unlock(&p->mutexes.m_write);
+	sem_post(p->semaphore->s_write);
 	p->last = time_stamp() - p->start;
-	pthread_mutex_lock(&p->mutexes.m_wait);
-	pthread_mutex_lock(&p->mutexes.m_write);
+	sem_wait(p->semaphore->names[p->id - 1]);
+	sem_wait(p->semaphore->s_write);
 	if (died == 0)
 		printf("%ld ms id %d is eating\n", time_stamp() - p->start, p->id);
-	pthread_mutex_unlock(&p->mutexes.m_write);
+	sem_post(p->semaphore->s_write);
 	m_sleep(p->args.time_to_eat);
-	pthread_mutex_unlock(&p->mutexes.m_wait);
-	pthread_mutex_unlock(p->l_fork);
-	pthread_mutex_unlock(p->r_fork);
+	sem_post(p->semaphore->names[p->id - 1]);
+	sem_post(p->semaphore->forks);
 }
 
 void	p_sleeping(t_philosophers *p)
 {
-	pthread_mutex_lock(&p->mutexes.m_write);
+	sem_wait(p->semaphore->s_write);
 	if (died == 0)
 		printf("%ld ms id %d is sleeping\n", time_stamp() - p->start, p->id);
-	pthread_mutex_unlock(&p->mutexes.m_write);
+	sem_post(p->semaphore->s_write);
 	m_sleep(p->args.time_to_sleep);
 }
 
 void	p_thinking(t_philosophers *p)
 {
-	pthread_mutex_lock(&p->mutexes.m_write);
+	sem_wait(p->semaphore->s_write);
 	if (died == 0)
 		printf("%ld ms id %d is thinking\n", time_stamp() - p->start, p->id);
-	pthread_mutex_unlock(&p->mutexes.m_write);
+	sem_post(p->semaphore->s_write);
 }
 
 int		p_filling(t_philosophers *p, int *i)
@@ -239,9 +304,9 @@ int		p_filling(t_philosophers *p, int *i)
 		{
 			if (died == 0)
 			{
-				pthread_mutex_lock(&p->mutexes.m_write);
+				sem_wait(p->semaphore->s_write);
 				printf("%ld ms id %d is full\n", time_stamp() - p->start, p->id);
-				pthread_mutex_unlock(&p->mutexes.m_write);
+				sem_post(p->semaphore->s_write);
 				return (1);
 			}
 		}
@@ -258,6 +323,7 @@ void	*threads(void *philosopher)
 	i = 0;
 	p = (t_philosophers *)philosopher;
 	pthread_create(&death_thread, NULL, death_checking, (void *)p);
+	pthread_detach(death_thread);
 	while (died == 0)
 	{
 		p_eating(p);
@@ -271,7 +337,8 @@ void	*threads(void *philosopher)
 
 int		beginning(t_main *m)
 {
-	int i;
+	int			i;
+	pthread_t	full_status_check;
 
 	i = -1;
 	while (++i < m->args.num_of_p)
@@ -289,7 +356,7 @@ int		beginning(t_main *m)
 
 int		main(int ac, char **av)
 {
-	t_main	m;
+	t_main m;
 
 	if (ac < 5 || ac > 6)
 	{
@@ -299,10 +366,12 @@ int		main(int ac, char **av)
 	if (validation(av))
 		return (0);
 	if (initialize(ac, av, &m))
-		return (0);
-	if (init_mutexes(&m))
+		return (0);	
+	if (init_semaphores(&m))
 		return (0);
 	if (init_philosophers(&m))
+		return (0);
+	if (init_names(&m))
 		return (0);
 	if (beginning(&m))
 		return (0);
