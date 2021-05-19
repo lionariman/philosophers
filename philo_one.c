@@ -6,7 +6,7 @@
 /*   By: keuclide <keuclide@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/05/11 21:38:19 by keuclide          #+#    #+#             */
-/*   Updated: 2021/05/14 13:37:32 by keuclide         ###   ########.fr       */
+/*   Updated: 2021/05/19 00:36:58 by keuclide         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -164,13 +164,18 @@ int		init_philosophers(t_main *m)
 
 //***********************************************************************************
 
-void	m_sleep(long time)
+void	m_sleep(long amount_of_time_to_wait)
 {
-	long ts;
+	long	current_time;
+	long	period_of_time;
 
-	ts = time_stamp();
-	while (time_stamp() - ts < time)
-		usleep(1);
+	current_time = time_stamp();
+	period_of_time = current_time + amount_of_time_to_wait;
+	while (period_of_time > current_time)
+	{
+		usleep(amount_of_time_to_wait);
+		current_time = time_stamp();
+	}
 }
 
 void	*death_checking(void *philosopher)
@@ -180,11 +185,13 @@ void	*death_checking(void *philosopher)
 	p = (t_philosophers *)philosopher;
 	while (died == 0)
 	{
+
 		pthread_mutex_lock(&p->mutexes.m_wait);
 		if ((time_stamp() - p->start - p->last) > p->args.time_to_die)
 		{
 			pthread_mutex_lock(&p->mutexes.m_write);
-			printf("%ld ms id %d died\n", time_stamp() - p->start, p->id);
+			if (died == 0)
+				printf("%ld ms id %d died\n", time_stamp() - p->start, p->id);
 			died = 1;
 			pthread_mutex_unlock(&p->mutexes.m_write);
 		}
@@ -199,7 +206,7 @@ void	p_eating(t_philosophers *p)
 	pthread_mutex_lock(p->r_fork);
 	pthread_mutex_lock(&p->mutexes.m_write);
 	if (died == 0)
-		printf("%ld ms id %d has taken a fork\n", time_stamp() - p->start, p->id);
+		printf("%ld ms id %d has taken a forks\n", time_stamp() - p->start, p->id);
 	pthread_mutex_unlock(&p->mutexes.m_write);
 	p->last = time_stamp() - p->start;
 	pthread_mutex_lock(&p->mutexes.m_wait);
@@ -258,6 +265,7 @@ void	*threads(void *philosopher)
 	i = 0;
 	p = (t_philosophers *)philosopher;
 	pthread_create(&death_thread, NULL, death_checking, (void *)p);
+	pthread_detach(death_thread);
 	while (died == 0)
 	{
 		p_eating(p);
@@ -306,6 +314,7 @@ int		main(int ac, char **av)
 		return (0);
 	if (beginning(&m))
 		return (0);
+	died = 1;
 	m_free(&m);
 	return (1);
 }
