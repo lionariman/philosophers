@@ -6,7 +6,7 @@
 /*   By: keuclide <keuclide@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/05/20 04:14:03 by keuclide          #+#    #+#             */
-/*   Updated: 2021/05/20 04:15:06 by keuclide         ###   ########.fr       */
+/*   Updated: 2021/05/21 06:22:25 by keuclide         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -39,9 +39,7 @@ void	p_eating(t_philosophers *p)
 	if (p->args->died == 0)
 		printf("%ld ms id %d has taken a forks\n",
 			time_stamp() - p->start, p->id);
-	pthread_mutex_unlock(&p->mutexes->m_write);
 	p->last = time_stamp() - p->start;
-	pthread_mutex_lock(&p->mutexes->m_write);
 	if (p->args->died == 0)
 		printf("%ld ms id %d is eating\n", time_stamp() - p->start, p->id);
 	pthread_mutex_unlock(&p->mutexes->m_write);

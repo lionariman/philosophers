@@ -6,7 +6,7 @@
 /*   By: keuclide <keuclide@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/05/14 15:08:14 by keuclide          #+#    #+#             */
-/*   Updated: 2021/05/20 04:53:31 by keuclide         ###   ########.fr       */
+/*   Updated: 2021/06/23 04:30:50 by keuclide         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,9 +24,28 @@ void	processes(t_philosophers *p)
 	{
 		p_eating(p);
 		if (p_filling(p, &i))
-			exit (0);
+			exit (1);
 		p_sleeping(p);
 		p_thinking(p);
+	}
+}
+
+void wait_philosophers(t_main *m)
+{
+	int	i;
+	int	j;
+	int status;
+
+	i = -1;
+	while (++i < m->args->num_of_times_each_p_must_eat)
+	{
+		waitpid(-1, &status, 0);
+		if (status == 0)
+		{
+			j = -1;
+			while (++j < m->args->num_of_p)
+				kill(m->p->pid[i], SIGTERM);
+		}
 	}
 }
 
@@ -46,11 +65,7 @@ int	beginning(t_main *m)
 		else if (m->p->pid[i] == -1)
 			return (m_error("cannot create a new process"));
 	}
-	waitpid(-1, NULL, 0);
-	usleep(200000);
-	i = -1;
-	while (++i < m->args->num_of_p)
-		kill(m->p->pid[i], SIGTERM);
+	wait_philosophers(m);
 	return (0);
 }
 

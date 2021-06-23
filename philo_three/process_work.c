@@ -6,7 +6,7 @@
 /*   By: keuclide <keuclide@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/05/20 04:41:42 by keuclide          #+#    #+#             */
-/*   Updated: 2021/05/20 04:51:44 by keuclide         ###   ########.fr       */
+/*   Updated: 2021/06/23 03:57:57 by keuclide         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,12 +37,10 @@ void	p_eating(t_philosophers *p)
 	if (p->args->died == 0)
 		printf("%ld ms id %d has taken a forks\n",
 			time_stamp() - p->start, p->id);
-	sem_post(p->semaphore->s_write);
-	sem_wait(p->semaphore->s_write);
+	p->last = time_stamp() - p->start;
 	if (p->args->died == 0)
 		printf("%ld ms id %d is eating\n", time_stamp() - p->start, p->id);
 	sem_post(p->semaphore->s_write);
-	p->last = time_stamp() - p->start;
 	m_sleep(p->args->time_to_eat);
 	sem_post(p->semaphore->forks);
 }
